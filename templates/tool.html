@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RedactPDF</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Mono:wght@400;500&display=swap');
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root[data-theme="dark"] {
+    --bg:#0a0a0f;--surface:#12121a;--surface2:#0d0d14;--border:#1e1e2e;
+    --accent:#e8ff47;--accent2:#7c3aed;--text:#f0f0f5;--muted:#5a5a7a;
+    --danger:#ff4757;--success:#2ed573;--shadow:rgba(0,0,0,0.4);
+  }
+  :root[data-theme="light"] {
+    --bg:#f4f4f8;--surface:#ffffff;--surface2:#f0f0f5;--border:#dcdce8;
+    --accent:#6d28d9;--accent2:#7c3aed;--text:#1a1a2e;--muted:#8888aa;
+    --danger:#e53e3e;--success:#276749;--shadow:rgba(0,0,0,0.08);
+  }
+
+  body{background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:2rem;overflow-x:hidden;transition:background .2s,color .2s;}
+  [data-theme="dark"] body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(124,58,237,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(124,58,237,.04) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;}
+
+  /* Header */
+  .header{width:100%;max-width:700px;display:flex;align-items:center;justify-content:space-between;margin-bottom:2rem;position:relative;z-index:1;}
+  .logo{font-size:1.3rem;font-weight:800;letter-spacing:-.02em;display:flex;align-items:center;gap:8px;}
+  .logo-icon{width:30px;height:30px;background:var(--accent);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:15px;color:#0a0a0f;}
+  .logo span{color:var(--accent);}
+  .header-right{display:flex;align-items:center;gap:8px;}
+  .user-chip{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted);}
+  .hdr-btn{padding:5px 11px;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-family:'DM Mono',monospace;font-size:.72rem;cursor:pointer;transition:all .15s;text-decoration:none;display:inline-flex;align-items:center;gap:5px;}
+  .hdr-btn:hover{border-color:var(--muted);color:var(--text);}
+  .hdr-btn.danger:hover{border-color:var(--danger);color:var(--danger);}
+  .hdr-btn.admin-btn{border-color:rgba(109,40,217,.4);color:var(--accent);}
+  .hdr-btn.admin-btn:hover{background:rgba(109,40,217,.08);}
+  .theme-toggle{width:36px;height:20px;background:var(--border);border-radius:100px;position:relative;cursor:pointer;border:none;transition:background .2s;flex-shrink:0;}
+  .theme-toggle::after{content:'';position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:var(--accent);transition:transform .2s;}
+  [data-theme="light"] .theme-toggle::after{transform:translateX(16px);}
+
+  /* Layout */
+  .container{width:100%;max-width:700px;position:relative;z-index:1;}
+  .tabs{display:flex;gap:4px;margin-bottom:1.4rem;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:4px;}
+  .tab{flex:1;padding:8px;text-align:center;border-radius:7px;cursor:pointer;font-family:'DM Mono',monospace;font-size:.76rem;color:var(--muted);transition:all .15s;border:none;background:transparent;}
+  .tab:hover{color:var(--text);}
+  .tab.active{background:var(--bg);color:var(--text);border:1px solid var(--border);box-shadow:0 1px 4px var(--shadow);}
+  .panel{display:none;}
+  .panel.active{display:block;}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:2rem;position:relative;overflow:hidden;box-shadow:0 2px 12px var(--shadow);}
+  [data-theme="dark"] .card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(232,255,71,.3),transparent);}
+
+  /* ── DROPZONE ── key fix: pointer-events on children */
+  .dropzone{border:2px dashed var(--border);border-radius:12px;padding:2rem 1.5rem;text-align:center;cursor:pointer;transition:all .2s;background:var(--surface2);position:relative;min-height:110px;display:flex;align-items:center;justify-content:center;user-select:none;}
+  .dropzone *{pointer-events:none;} /* prevents child elements stealing drag events */
+  .dropzone .file-change{pointer-events:auto;} /* re-enable only for this link */
+  .dropzone.dragover{border-color:var(--accent);background:rgba(109,40,217,.05);transform:scale(1.01);}
+  .dropzone.has-file{border-color:var(--success);background:rgba(39,103,73,.05);}
+  .dropzone.has-file.dragover{border-color:var(--accent);background:rgba(109,40,217,.05);}
+  .drop-icon{font-size:2rem;margin-bottom:.5rem;display:block;}
+  .drop-text{color:var(--muted);font-size:.85rem;}
+  .drop-text strong{color:var(--text);display:block;margin-bottom:.2rem;}
+  input[type=file]{display:none;}
+  .file-preview{display:none;align-items:center;gap:12px;}
+  .file-preview.visible{display:flex;}
+  .file-icon-big{font-size:2.2rem;flex-shrink:0;}
+  .file-name{font-family:'DM Mono',monospace;font-size:.82rem;color:var(--success);font-weight:500;max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .file-size{font-family:'DM Mono',monospace;font-size:.71rem;color:var(--muted);margin-top:2px;}
+  .file-change{font-family:'DM Mono',monospace;font-size:.69rem;color:var(--accent2);margin-top:5px;cursor:pointer;text-decoration:underline;}
+  .file-change:hover{color:var(--text);}
+
+  /* Options */
+  .options{margin-top:1.3rem;display:flex;flex-direction:column;gap:1.1rem;}
+  .lbl{font-size:.72rem;font-family:'DM Mono',monospace;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px;display:flex;align-items:center;gap:6px;}
+  .tag{background:rgba(124,58,237,.12);color:var(--accent2);border:1px solid rgba(124,58,237,.22);font-size:10px;padding:1px 7px;border-radius:100px;}
+  .tag-green{background:rgba(39,103,73,.12);color:var(--success);border:1px solid rgba(39,103,73,.22);font-size:10px;padding:1px 7px;border-radius:100px;font-family:'DM Mono',monospace;}
+
+  .dpi-row,.mode-row{display:flex;gap:6px;}
+  .dpi-btn,.mode-btn{flex:1;padding:7px;background:var(--surface2);border:1px solid var(--border);border-radius:7px;color:var(--muted);font-family:'DM Mono',monospace;font-size:.74rem;cursor:pointer;transition:all .15s;text-align:center;}
+  .dpi-btn:hover,.mode-btn:hover{border-color:var(--muted);color:var(--text);}
+  .dpi-btn.active{border-color:var(--accent);color:var(--accent);background:rgba(109,40,217,.06);}
+  .mode-btn.active{border-color:var(--accent2);color:var(--accent2);background:rgba(124,58,237,.07);}
+
+  .per-page-hint{font-family:'DM Mono',monospace;font-size:.71rem;color:var(--muted);margin-top:6px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:7px;display:none;line-height:1.6;}
+  .per-page-hint.visible{display:block;}
+  .per-page-hint strong{color:var(--text);}
+
+  .wiki-row{display:flex;gap:7px;margin-top:7px;}
+  .wiki-input{flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:7px;color:var(--text);font-family:'DM Mono',monospace;font-size:.78rem;padding:7px 11px;outline:none;transition:border-color .2s;}
+  .wiki-input:focus{border-color:var(--accent2);}
+  .wiki-input::placeholder{color:var(--muted);}
+  .wiki-btn{padding:7px 12px;background:rgba(124,58,237,.1);border:1px solid rgba(124,58,237,.28);border-radius:7px;color:var(--accent2);font-family:'DM Mono',monospace;font-size:.74rem;cursor:pointer;transition:all .15s;white-space:nowrap;display:flex;align-items:center;gap:4px;}
+  .wiki-btn:hover{background:rgba(124,58,237,.2);}
+  .wiki-btn:disabled{opacity:.4;cursor:not-allowed;}
+  .wiki-btn .spin{display:none;animation:rot .8s linear infinite;}
+  .wiki-btn.loading .spin{display:inline;}
+  .wiki-btn.loading .lbl2{display:none;}
+  @keyframes rot{to{transform:rotate(360deg);}}
+  .wiki-rand{padding:7px 11px;background:rgba(109,40,217,.06);border:1px solid rgba(109,40,217,.2);border-radius:7px;color:var(--accent);font-family:'DM Mono',monospace;font-size:.74rem;cursor:pointer;transition:all .15s;white-space:nowrap;}
+  .wiki-rand:hover{background:rgba(109,40,217,.12);}
+  .wiki-rand:disabled{opacity:.4;cursor:not-allowed;}
+  .wiki-stat{font-family:'DM Mono',monospace;font-size:.7rem;margin-top:5px;display:none;padding:5px 9px;border-radius:5px;}
+  .wiki-stat.ok{display:block;color:var(--success);background:rgba(39,103,73,.08);border:1px solid rgba(39,103,73,.2);}
+  .wiki-stat.err{display:block;color:var(--danger);background:rgba(229,62,62,.06);border:1px solid rgba(229,62,62,.2);}
+  .txt-wrap{position:relative;margin-top:8px;}
+  .ghost{position:absolute;top:9px;right:9px;font-family:'DM Mono',monospace;font-size:10px;color:var(--accent2);opacity:.45;pointer-events:none;}
+  textarea{width:100%;min-height:80px;background:var(--surface2);border:1px solid rgba(124,58,237,.25);border-radius:9px;color:var(--text);font-family:'DM Mono',monospace;font-size:.78rem;padding:9px 11px;resize:vertical;outline:none;transition:border-color .2s;line-height:1.5;}
+  textarea:focus{border-color:var(--accent2);box-shadow:0 0 0 3px rgba(124,58,237,.08);}
+  textarea::placeholder{color:var(--muted);}
+  .char-c{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);text-align:right;margin-top:3px;}
+
+  /* Buttons */
+  .primary-btn{width:100%;margin-top:1.3rem;padding:12px;background:var(--accent);color:#0a0a0f;border:none;border-radius:9px;font-family:'Syne',sans-serif;font-size:.95rem;font-weight:700;cursor:pointer;transition:all .2s;}
+  [data-theme="light"] .primary-btn{color:#fff;}
+  .primary-btn:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 6px 18px rgba(109,40,217,.22);}
+  .primary-btn:disabled{opacity:.4;cursor:not-allowed;}
+  .secondary-btn{width:100%;margin-top:1rem;padding:11px;background:transparent;color:var(--accent2);border:1px solid rgba(124,58,237,.3);border-radius:9px;font-family:'Syne',sans-serif;font-size:.92rem;font-weight:700;cursor:pointer;transition:all .2s;}
+  .secondary-btn:hover:not(:disabled){background:rgba(124,58,237,.08);}
+  .secondary-btn:disabled{opacity:.4;cursor:not-allowed;}
+
+  .prog-wrap{display:none;margin-top:.9rem;}
+  .prog-wrap.visible{display:block;}
+  .prog-bg{height:4px;background:var(--border);border-radius:2px;overflow:hidden;}
+  .prog-bar{height:100%;background:linear-gradient(90deg,var(--accent2),var(--accent));border-radius:2px;width:0%;transition:width .3s;}
+  .prog-txt{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted);margin-top:5px;}
+  .status{display:none;margin-top:.9rem;padding:8px 12px;border-radius:7px;font-size:.8rem;font-family:'DM Mono',monospace;align-items:center;gap:7px;}
+  .status.visible{display:flex;}
+  .status.error{background:rgba(229,62,62,.07);border:1px solid rgba(229,62,62,.2);color:var(--danger);}
+  .status.success{background:rgba(39,103,73,.07);border:1px solid rgba(39,103,73,.2);color:var(--success);}
+
+  /* Extract */
+  .ext-result{display:none;margin-top:1rem;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:.9rem;}
+  .ext-result.visible{display:block;}
+  .ext-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;}
+  .ext-hdr span{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted);}
+  .copy-btn{padding:3px 9px;background:transparent;border:1px solid var(--border);border-radius:5px;color:var(--muted);font-family:'DM Mono',monospace;font-size:.68rem;cursor:pointer;transition:all .15s;}
+  .copy-btn:hover{border-color:var(--accent);color:var(--accent);}
+  .ext-txt{white-space:pre-wrap;font-family:'DM Mono',monospace;font-size:.73rem;color:var(--text);line-height:1.6;max-height:280px;overflow-y:auto;}
+
+  /* Admin */
+  .admin-section{margin-bottom:1.8rem;}
+  .admin-section h3{font-size:.82rem;font-weight:700;margin-bottom:1rem;color:var(--accent);font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:.08em;}
+  .form-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:.8rem;}
+  .form-input{flex:1;min-width:130px;padding:8px 11px;background:var(--surface2);border:1px solid var(--border);border-radius:7px;color:var(--text);font-family:'DM Mono',monospace;font-size:.78rem;outline:none;transition:border-color .2s;}
+  .form-input:focus{border-color:var(--accent);}
+  .form-input::placeholder{color:var(--muted);}
+  .form-check{display:flex;align-items:center;gap:6px;font-family:'DM Mono',monospace;font-size:.78rem;color:var(--muted);cursor:pointer;padding:8px 0;}
+  .form-check input[type=checkbox]{width:auto;cursor:pointer;accent-color:var(--accent);}
+  .create-btn{padding:8px 18px;background:var(--accent);color:#0a0a0f;border:none;border-radius:7px;font-family:'Syne',sans-serif;font-size:.85rem;font-weight:700;cursor:pointer;transition:all .15s;white-space:nowrap;}
+  [data-theme="light"] .create-btn{color:#fff;}
+  .create-btn:hover{box-shadow:0 4px 14px rgba(109,40,217,.2);}
+  .data-table{width:100%;border-collapse:collapse;}
+  .data-table th{font-family:'DM Mono',monospace;font-size:.67rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;padding:6px 10px;text-align:left;border-bottom:1px solid var(--border);}
+  .data-table td{padding:8px 10px;font-family:'DM Mono',monospace;font-size:.75rem;border-bottom:1px solid var(--border);color:var(--text);vertical-align:middle;}
+  .data-table tr:last-child td{border-bottom:none;}
+  .u-badge{display:inline-block;padding:2px 7px;border-radius:100px;font-size:10px;}
+  .u-badge.admin{background:rgba(109,40,217,.1);color:var(--accent);border:1px solid rgba(109,40,217,.2);}
+  .u-badge.user{background:rgba(90,90,122,.1);color:var(--muted);border:1px solid rgba(90,90,122,.2);}
+  .del-btn{padding:3px 9px;background:transparent;border:1px solid rgba(229,62,62,.3);border-radius:5px;color:var(--danger);font-family:'DM Mono',monospace;font-size:.68rem;cursor:pointer;transition:all .15s;}
+  .del-btn:hover{background:rgba(229,62,62,.08);}
+  .pwd-btn{padding:3px 9px;background:transparent;border:1px solid var(--border);border-radius:5px;color:var(--muted);font-family:'DM Mono',monospace;font-size:.68rem;cursor:pointer;transition:all .15s;margin-right:5px;}
+  .pwd-btn:hover{border-color:var(--accent2);color:var(--accent2);}
+  .admin-msg{font-family:'DM Mono',monospace;font-size:.78rem;padding:8px 12px;border-radius:7px;margin-top:.8rem;display:none;}
+  .admin-msg.ok{display:block;color:var(--success);background:rgba(39,103,73,.07);border:1px solid rgba(39,103,73,.2);}
+  .admin-msg.err{display:block;color:var(--danger);background:rgba(229,62,62,.07);border:1px solid rgba(229,62,62,.2);}
+  .log-ok{color:var(--success);} .log-fail{color:var(--danger);} .log-info{color:var(--accent);}
+  .muted-cell{color:var(--muted);}
+  .empty-row td{color:var(--muted);padding:14px 10px;}
+  .footer-note{margin-top:1.5rem;text-align:center;font-family:'DM Mono',monospace;font-size:.7rem;color:var(--muted);}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo"><div class="logo-icon">📄</div>Redact<span>PDF</span></div>
+  <div class="header-right">
+    <span class="user-chip">{{ name }}</span>
+    <button class="theme-toggle" id="themeToggle" title="Cambiar tema" onclick="toggleTheme()"></button>
+    {% if is_admin %}<button class="hdr-btn admin-btn" onclick="switchTab('admin')">⚙ Admin</button>{% endif %}
+    <a href="/logout" class="hdr-btn danger">Salir</a>
+  </div>
+</div>
+
+<div class="container">
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('convert')">🔄 Convertir</button>
+    <button class="tab" onclick="switchTab('extract')">🔍 Verificar</button>
+    {% if is_admin %}
+    <button class="tab" onclick="switchTab('history')">📋 Historial</button>
+    <button class="tab" onclick="switchTab('admin')">⚙ Usuarios</button>
+    {% endif %}
+  </div>
+
+  <!-- CONVERT -->
+  <div class="panel active" id="panel-convert">
+    <div class="card">
+
+      <!-- Dropzone 1 — click handled by JS, NOT inline onclick -->
+      <div class="dropzone" id="dz1">
+        <div id="dz1-empty" style="text-align:center;width:100%">
+          <span class="drop-icon">📄</span>
+          <div class="drop-text"><strong>Arrastra tu PDF aquí</strong>o haz clic para seleccionar</div>
+        </div>
+        <div class="file-preview" id="dz1-prev">
+          <span class="file-icon-big">📑</span>
+          <div>
+            <div class="file-name" id="fn1"></div>
+            <div class="file-size" id="fs1"></div>
+            <div class="file-change" id="fc1">↩ Cambiar archivo</div>
+          </div>
+        </div>
+        <input type="file" id="fi1" accept=".pdf">
+      </div>
+
+      <div class="options">
+        <div>
+          <div class="lbl">Calidad (DPI)</div>
+          <div class="dpi-row">
+            <div class="dpi-btn" data-dpi="96">96 — Rápido</div>
+            <div class="dpi-btn active" data-dpi="150">150 — Balanceado</div>
+            <div class="dpi-btn" data-dpi="200">200 — Alta</div>
+            <div class="dpi-btn" data-dpi="300">300 — Máx</div>
+          </div>
+        </div>
+
+        <div>
+          <div class="lbl">Texto invisible incrustado <span class="tag">OPCIONAL</span></div>
+          <div class="lbl" style="margin-top:6px;margin-bottom:5px">Modo de distribución</div>
+          <div class="mode-row">
+            <div class="mode-btn active" data-mode="per_page" onclick="setMode('per_page')">Diferente por página</div>
+            <div class="mode-btn" data-mode="same" onclick="setMode('same')">Mismo en todas</div>
+          </div>
+          <div class="per-page-hint visible" id="perPageHint">
+            Cada vez que presionas <strong>🎲 Random</strong> se agrega un bloque nuevo separado por <strong>---</strong> — uno por página. También puedes escribir manualmente y separar con <strong>---</strong>.
+          </div>
+          <div class="wiki-row">
+            <input type="text" id="wikiTopic" class="wiki-input" placeholder="Tema Wikipedia…">
+            <button class="wiki-btn" id="wfb" onclick="fetchWiki()"><span class="spin">↻</span><span class="lbl2">🔍 Jalar</span></button>
+            <button class="wiki-rand" id="wrb" onclick="fetchWikiRandom()">🎲 Random</button>
+          </div>
+          <div class="wiki-stat" id="wikiStat"></div>
+          <div class="txt-wrap">
+            <textarea id="hiddenText" placeholder="Presiona 🎲 Random varias veces para llenar cada página con texto diferente…" maxlength="15000"></textarea>
+            <span class="ghost">invisible</span>
+          </div>
+          <div class="char-c"><span id="cc">0</span>/15000</div>
+        </div>
+      </div>
+
+      <button class="primary-btn" id="convertBtn" disabled>Convertir PDF</button>
+      <div class="prog-wrap" id="pw1"><div class="prog-bg"><div class="prog-bar" id="pb1"></div></div><div class="prog-txt" id="pt1">Procesando…</div></div>
+      <div class="status" id="cs"></div>
+    </div>
+  </div>
+
+  <!-- EXTRACT -->
+  <div class="panel" id="panel-extract">
+    <div class="card">
+      <div class="dropzone" id="dz2">
+        <div id="dz2-empty" style="text-align:center;width:100%">
+          <span class="drop-icon">🔍</span>
+          <div class="drop-text"><strong>Sube el PDF a verificar</strong>Extrae todo el texto, incluido el invisible</div>
+        </div>
+        <div class="file-preview" id="dz2-prev">
+          <span class="file-icon-big">📑</span>
+          <div>
+            <div class="file-name" id="fn2"></div>
+            <div class="file-size" id="fs2"></div>
+            <div class="file-change" id="fc2">↩ Cambiar archivo</div>
+          </div>
+        </div>
+        <input type="file" id="fi2" accept=".pdf">
+      </div>
+      <button class="secondary-btn" id="extractBtn" disabled>Extraer texto del PDF</button>
+      <div class="prog-wrap" id="pw2"><div class="prog-bg"><div class="prog-bar" id="pb2"></div></div><div class="prog-txt" id="pt2">Leyendo…</div></div>
+      <div class="ext-result" id="extResult">
+        <div class="ext-hdr"><span id="extMeta"></span><button class="copy-btn" onclick="copyExt()">Copiar</button></div>
+        <pre class="ext-txt" id="extTxt"></pre>
+      </div>
+      <div class="status" id="es"></div>
+    </div>
+  </div>
+
+  {% if is_admin %}
+  <!-- HISTORIAL -->
+  <div class="panel" id="panel-history">
+    <div class="card">
+      <div class="admin-section" style="margin-bottom:0">
+        <h3>Historial de conversiones</h3>
+        <table class="data-table">
+          <thead><tr><th>Fecha/Hora</th><th>Usuario</th><th>Archivo</th><th>Páginas</th><th>DPI</th><th>Texto inv.</th></tr></thead>
+          <tbody id="histTbody"><tr class="empty-row"><td colspan="6">Cargando…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ADMIN -->
+  <div class="panel" id="panel-admin">
+    <div class="card">
+      <div class="admin-section">
+        <h3>Crear usuario</h3>
+        <div class="form-row">
+          <input type="text" id="nu_username" class="form-input" placeholder="usuario">
+          <input type="text" id="nu_name" class="form-input" placeholder="Nombre completo">
+        </div>
+        <div class="form-row">
+          <input type="password" id="nu_password" class="form-input" placeholder="Contraseña (mín. 8)">
+          <input type="password" id="nu_password2" class="form-input" placeholder="Confirmar contraseña">
+        </div>
+        <div class="form-row" style="align-items:center;justify-content:space-between;">
+          <label class="form-check"><input type="checkbox" id="nu_admin"> Es administrador</label>
+          <button class="create-btn" onclick="createUser()">Crear usuario</button>
+        </div>
+        <div class="admin-msg" id="createMsg"></div>
+      </div>
+      <div class="admin-section">
+        <h3>Usuarios existentes</h3>
+        <table class="data-table">
+          <thead><tr><th>Nombre</th><th>Usuario</th><th>Rol</th><th>Acciones</th></tr></thead>
+          <tbody id="usersTbody"><tr class="empty-row"><td colspan="4">Cargando…</td></tr></tbody>
+        </table>
+        <div class="admin-msg" id="actionMsg"></div>
+      </div>
+      <div class="admin-section" style="margin-bottom:0">
+        <h3>Log de actividad</h3>
+        <table class="data-table">
+          <thead><tr><th>Fecha/Hora</th><th>Usuario</th><th>Evento</th></tr></thead>
+          <tbody id="logTbody"><tr class="empty-row"><td colspan="3">Cargando…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<p class="footer-note">RedactPDF · Procesado local · Sesión segura</p>
+
+<script>
+let selFile1=null, selFile2=null, selDpi=150, hiddenMode='per_page';
+const allTabs=['convert','extract'{% if is_admin %},'history','admin'{% endif %}];
+
+// ── Theme ──────────────────────────────────────────────────────────────────
+function toggleTheme(){
+  const h=document.documentElement;
+  const next=h.getAttribute('data-theme')==='dark'?'light':'dark';
+  h.setAttribute('data-theme',next);
+  localStorage.setItem('theme',next);
+}
+(()=>{ document.documentElement.setAttribute('data-theme',localStorage.getItem('theme')||'dark'); })();
+
+// ── Tabs ──────────────────────────────────────────────────────────────────
+function switchTab(name){
+  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',allTabs[i]===name));
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  const p=document.getElementById('panel-'+name);
+  if(p) p.classList.add('active');
+  if(name==='admin'){loadUsers();loadLog();}
+  if(name==='history'){loadHistory();}
+}
+
+// ── DPI ───────────────────────────────────────────────────────────────────
+document.querySelectorAll('.dpi-btn').forEach(b=>{
+  b.addEventListener('click',()=>{
+    document.querySelectorAll('.dpi-btn').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active'); selDpi=parseInt(b.dataset.dpi);
+  });
+});
+
+// ── Mode ──────────────────────────────────────────────────────────────────
+function setMode(mode){
+  hiddenMode=mode;
+  document.querySelectorAll('.mode-btn').forEach(b=>b.classList.toggle('active',b.dataset.mode===mode));
+  document.getElementById('perPageHint').classList.toggle('visible',mode==='per_page');
+  const ta=document.getElementById('hiddenText');
+  ta.placeholder=mode==='per_page'
+    ?'Presiona 🎲 Random varias veces para llenar cada página con texto diferente…'
+    :'Escribe o jala texto invisible de Wikipedia…';
+}
+
+// ── Dropzones — clean implementation ─────────────────────────────────────
+function initDrop(dzId, fiId, emptyId, prevId, fnId, fsId, fcId, btnId, slot){
+  const dz = document.getElementById(dzId);
+  const fi = document.getElementById(fiId);
+  const fc = document.getElementById(fcId);
+
+  // Click on dropzone opens file picker (but not when clicking "cambiar")
+  dz.addEventListener('click', function(e){
+    if(e.target === fc) return; // handled separately below
+    fi.click();
+  });
+
+  // "Cambiar archivo" link
+  fc.addEventListener('click', function(e){
+    e.stopPropagation();
+    resetDrop(dzId, fiId, emptyId, prevId, btnId, slot);
+    fi.click();
+  });
+
+  // File input change
+  fi.addEventListener('change', function(){
+    if(fi.files[0]) handleFile(fi.files[0], dzId, emptyId, prevId, fnId, fsId, btnId, slot);
+  });
+
+  // Drag & drop
+  dz.addEventListener('dragenter', function(e){ e.preventDefault(); e.stopPropagation(); dz.classList.add('dragover'); });
+  dz.addEventListener('dragover',  function(e){ e.preventDefault(); e.stopPropagation(); dz.classList.add('dragover'); });
+  dz.addEventListener('dragleave', function(e){ e.preventDefault(); e.stopPropagation(); dz.classList.remove('dragover'); });
+  dz.addEventListener('drop',      function(e){
+    e.preventDefault(); e.stopPropagation();
+    dz.classList.remove('dragover');
+    const file = e.dataTransfer.files[0];
+    if(file) handleFile(file, dzId, emptyId, prevId, fnId, fsId, btnId, slot);
+  });
+}
+
+function handleFile(file, dzId, emptyId, prevId, fnId, fsId, btnId, slot){
+  if(!file.name.toLowerCase().endsWith('.pdf')){
+    alert('Solo se aceptan archivos PDF'); return;
+  }
+  if(slot===1) selFile1=file; else selFile2=file;
+  document.getElementById(dzId).classList.add('has-file');
+  document.getElementById(emptyId).style.display='none';
+  document.getElementById(prevId).classList.add('visible');
+  document.getElementById(fnId).textContent=file.name;
+  document.getElementById(fsId).textContent=(file.size/1024/1024).toFixed(2)+' MB';
+  document.getElementById(btnId).disabled=false;
+  if(slot===2) document.getElementById('extResult').classList.remove('visible');
+}
+
+function resetDrop(dzId, fiId, emptyId, prevId, btnId, slot){
+  document.getElementById(dzId).classList.remove('has-file');
+  document.getElementById(emptyId).style.display='block';
+  document.getElementById(prevId).classList.remove('visible');
+  document.getElementById(fiId).value='';
+  document.getElementById(btnId).disabled=true;
+  if(slot===1) selFile1=null; else selFile2=null;
+}
+
+// Initialize both dropzones
+initDrop('dz1','fi1','dz1-empty','dz1-prev','fn1','fs1','fc1','convertBtn',1);
+initDrop('dz2','fi2','dz2-empty','dz2-prev','fn2','fs2','fc2','extractBtn',2);
+
+// ── Char counter ──────────────────────────────────────────────────────────
+document.getElementById('hiddenText').addEventListener('input',()=>{
+  document.getElementById('cc').textContent=document.getElementById('hiddenText').value.length;
+});
+
+// ── Wikipedia ─────────────────────────────────────────────────────────────
+async function fetchWiki(){
+  const t=document.getElementById('wikiTopic').value.trim();
+  if(!t){setWikiStat('Escribe un tema','err');return;}
+  await doWiki(`https://es.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(t)}`);
+}
+async function fetchWikiRandom(){ await doWiki('https://es.wikipedia.org/api/rest_v1/page/random/summary'); }
+
+async function doWiki(url){
+  const fb=document.getElementById('wfb'), rb=document.getElementById('wrb');
+  fb.disabled=rb.disabled=true; fb.classList.add('loading'); setWikiStat('Buscando…','');
+  try{
+    const d=await(await fetch(url)).json();
+    if(!d.extract) throw new Error('Sin contenido');
+    const ta=document.getElementById('hiddenText');
+    const block=`${d.title}\n\n${d.extract}`;
+    if(hiddenMode==='per_page'){
+      // Append as new block separated by ---
+      ta.value=ta.value.trim()+(ta.value.trim()?'\n---\n':'')+block;
+    } else {
+      ta.value=block.slice(0,15000);
+    }
+    document.getElementById('cc').textContent=ta.value.length;
+    setWikiStat(`✓ "${d.title}" — ${d.extract.length} chars`,'ok');
+  }catch(e){ setWikiStat('⚠ '+e.message,'err'); }
+  finally{ fb.disabled=rb.disabled=false; fb.classList.remove('loading'); }
+}
+function setWikiStat(m,t){ const e=document.getElementById('wikiStat'); e.textContent=m; e.className='wiki-stat'+(t?' '+t:''); }
+
+// ── Convert ───────────────────────────────────────────────────────────────
+document.getElementById('convertBtn').addEventListener('click', async()=>{
+  if(!selFile1) return;
+  const btn=document.getElementById('convertBtn');
+  btn.disabled=true; btn.textContent='Procesando…';
+  const pw=document.getElementById('pw1'), bar=document.getElementById('pb1'), pt=document.getElementById('pt1');
+  pw.classList.add('visible');
+  let pct=0;
+  const iv=setInterval(()=>{ pct=Math.min(pct+Math.random()*8,88); bar.style.width=pct+'%';
+    if(pct>50) pt.textContent='Renderizando páginas…';
+    if(pct>75) pt.textContent='Empaquetando…';
+  },300);
+  try{
+    const fd=new FormData();
+    fd.append('pdf',selFile1);
+    fd.append('dpi',selDpi);
+    fd.append('hidden_mode',hiddenMode);
+    fd.append('hidden_text',document.getElementById('hiddenText').value.trim());
+    const res=await fetch('/convert',{method:'POST',body:fd});
+    clearInterval(iv); bar.style.width='100%';
+    if(!res.ok) throw new Error((await res.json()).error);
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(await res.blob());
+    a.download=selFile1.name.replace('.pdf','_redacted.pdf');
+    a.click();
+    pt.textContent='¡Listo!';
+    showStatus('cs','PDF generado. Descarga iniciada.','success');
+  }catch(e){ clearInterval(iv); showStatus('cs',e.message,'error'); }
+  finally{
+    setTimeout(()=>{ btn.disabled=false; btn.textContent='Convertir PDF'; pw.classList.remove('visible'); bar.style.width='0%'; pt.textContent='Procesando…'; },2000);
+  }
+});
+
+// ── Extract ───────────────────────────────────────────────────────────────
+document.getElementById('extractBtn').addEventListener('click', async()=>{
+  if(!selFile2) return;
+  const btn=document.getElementById('extractBtn');
+  btn.disabled=true; btn.textContent='Extrayendo…';
+  const pw=document.getElementById('pw2'), bar=document.getElementById('pb2');
+  pw.classList.add('visible'); document.getElementById('extResult').classList.remove('visible');
+  let pct=0; const iv=setInterval(()=>{ pct=Math.min(pct+10,85); bar.style.width=pct+'%'; },200);
+  try{
+    const fd=new FormData(); fd.append('pdf',selFile2);
+    const data=await(await fetch('/extract',{method:'POST',body:fd})).json();
+    clearInterval(iv); bar.style.width='100%';
+    if(data.error) throw new Error(data.error);
+    if(!data.text){ showStatus('es','Sin texto — el PDF es imagen pura.','success'); }
+    else{
+      document.getElementById('extMeta').textContent=`${data.chars} caracteres encontrados`;
+      document.getElementById('extTxt').textContent=data.text;
+      document.getElementById('extResult').classList.add('visible');
+      showStatus('es','Texto extraído correctamente.','success');
+    }
+  }catch(e){ clearInterval(iv); showStatus('es',e.message,'error'); }
+  finally{ setTimeout(()=>{ btn.disabled=false; btn.textContent='Extraer texto del PDF'; pw.classList.remove('visible'); bar.style.width='0%'; },1000); }
+});
+
+function copyExt(){
+  navigator.clipboard.writeText(document.getElementById('extTxt').textContent);
+  const b=document.querySelector('.copy-btn'); b.textContent='✓ Copiado'; setTimeout(()=>b.textContent='Copiar',1500);
+}
+function showStatus(id,msg,type){
+  const el=document.getElementById(id);
+  el.textContent=(type==='error'?'⚠ ':'✓ ')+msg;
+  el.className=`status ${type} visible`;
+}
+
+// ── Admin ─────────────────────────────────────────────────────────────────
+async function loadUsers(){
+  try{
+    const users=await(await fetch('/admin/users')).json();
+    const tbody=document.getElementById('usersTbody');
+    if(!users.length){tbody.innerHTML='<tr class="empty-row"><td colspan="4">No hay usuarios</td></tr>';return;}
+    tbody.innerHTML=users.map(u=>`
+      <tr>
+        <td>${u.name}</td><td class="muted-cell">${u.username}</td>
+        <td><span class="u-badge ${u.is_admin?'admin':'user'}">${u.is_admin?'admin':'usuario'}</span></td>
+        <td>
+          <button class="pwd-btn" onclick="changePassword('${u.username}','${u.name}')">🔑</button>
+          <button class="del-btn" onclick="deleteUser('${u.username}','${u.name}')">Eliminar</button>
+        </td>
+      </tr>`).join('');
+  }catch(e){}
+}
+
+async function loadLog(){
+  try{
+    const log=await(await fetch('/admin/log')).json();
+    const tbody=document.getElementById('logTbody');
+    if(!log.length){tbody.innerHTML='<tr class="empty-row"><td colspan="3">Sin actividad</td></tr>';return;}
+    tbody.innerHTML=log.map(e=>`
+      <tr>
+        <td class="muted-cell">${e.ts}</td><td>${e.username}</td>
+        <td class="${e.type==='login_ok'?'log-ok':e.type==='login_fail'?'log-fail':'log-info'}">${
+          e.type==='login_ok'?'✓ Login exitoso':
+          e.type==='login_fail'?'✗ Intento fallido':
+          e.type==='user_created'?`+ Creó usuario: ${e.detail}`:
+          e.type==='user_deleted'?`− Eliminó usuario: ${e.detail}`:e.type
+        }</td>
+      </tr>`).join('');
+  }catch(e){}
+}
+
+async function loadHistory(){
+  try{
+    const hist=await(await fetch('/admin/history')).json();
+    const tbody=document.getElementById('histTbody');
+    if(!hist.length){tbody.innerHTML='<tr class="empty-row"><td colspan="6">Sin conversiones aún</td></tr>';return;}
+    tbody.innerHTML=hist.map(h=>`
+      <tr>
+        <td class="muted-cell">${h.ts}</td><td>${h.username}</td>
+        <td title="${h.filename}" style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h.filename}</td>
+        <td>${h.pages}</td><td>${h.dpi}</td>
+        <td>${h.has_hidden?'<span class="tag-green">Sí</span>':'<span style="color:var(--muted)">No</span>'}</td>
+      </tr>`).join('');
+  }catch(e){}
+}
+
+async function createUser(){
+  const username=document.getElementById('nu_username').value.trim().toLowerCase();
+  const name=document.getElementById('nu_name').value.trim();
+  const password=document.getElementById('nu_password').value;
+  const password2=document.getElementById('nu_password2').value;
+  const is_admin=document.getElementById('nu_admin').checked;
+  if(!username||!name||!password){setAdminMsg('createMsg','Completa todos los campos','err');return;}
+  if(password!==password2){setAdminMsg('createMsg','Las contraseñas no coinciden','err');return;}
+  if(password.length<8){setAdminMsg('createMsg','Contraseña mínimo 8 caracteres','err');return;}
+  try{
+    const res=await fetch('/admin/users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,name,password,is_admin})});
+    const data=await res.json();
+    if(!res.ok) throw new Error(data.error);
+    setAdminMsg('createMsg',`✓ Usuario '${username}' creado`,'ok');
+    ['nu_username','nu_name','nu_password','nu_password2'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('nu_admin').checked=false;
+    loadUsers(); loadLog();
+  }catch(e){ setAdminMsg('createMsg',e.message,'err'); }
+}
+
+async function deleteUser(username,name){
+  if(!confirm(`¿Eliminar al usuario "${name}" (${username})?`)) return;
+  try{
+    const res=await fetch(`/admin/users/${username}`,{method:'DELETE'});
+    const data=await res.json();
+    if(!res.ok) throw new Error(data.error);
+    setAdminMsg('actionMsg',`✓ '${username}' eliminado`,'ok');
+    loadUsers(); loadLog();
+  }catch(e){ setAdminMsg('actionMsg',e.message,'err'); }
+}
+
+async function changePassword(username,name){
+  const pwd=prompt(`Nueva contraseña para ${name}:`);
+  if(!pwd) return;
+  if(pwd.length<8){setAdminMsg('actionMsg','Mínimo 8 caracteres','err');return;}
+  try{
+    const res=await fetch(`/admin/users/${username}/password`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pwd})});
+    const data=await res.json();
+    if(!res.ok) throw new Error(data.error);
+    setAdminMsg('actionMsg',`✓ Contraseña de '${username}' actualizada`,'ok');
+  }catch(e){ setAdminMsg('actionMsg',e.message,'err'); }
+}
+
+function setAdminMsg(id,msg,type){
+  const el=document.getElementById(id); el.textContent=msg; el.className=`admin-msg ${type}`;
+  setTimeout(()=>el.className='admin-msg',4000);
+}
+</script>
+</body>
+</html>
