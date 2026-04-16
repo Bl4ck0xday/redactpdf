@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es" data-theme="dark">
+<html lang="es" data-theme="light">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -193,6 +193,32 @@
   .modal-close-btn{width:100%;margin-top:1.2rem;padding:11px;background:var(--accent);color:#0a0a0f;border:none;border-radius:9px;font-family:'Syne',sans-serif;font-size:.92rem;font-weight:700;cursor:pointer;transition:all .2s;}
   .modal-close-btn:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(109,40,217,.22);}
   [data-theme="light"] .modal-close-btn{color:#fff;}
+
+  /* ── Tooltips ── */
+  .tip-wrap{position:relative;display:inline-block;}
+  .tip{position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);background:#1a1a2e;color:#f0f0f5;font-family:'DM Mono',monospace;font-size:.71rem;padding:7px 10px;border-radius:7px;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .2s;z-index:100;border:1px solid rgba(124,58,237,.3);line-height:1.5;max-width:220px;white-space:normal;text-align:center;}
+  .tip::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:#1a1a2e;}
+  [data-theme="light"] .tip{background:#1a1a2e;color:#f0f0f5;}
+  .tip-wrap:hover .tip,.tip-wrap.show .tip{opacity:1;}
+
+  /* Tour overlay */
+  .tour-backdrop{position:fixed;inset:0;z-index:500;pointer-events:none;}
+  .tour-box{position:absolute;background:var(--surface);border:2px solid var(--accent);border-radius:12px;padding:14px 16px;max-width:240px;box-shadow:0 8px 30px rgba(0,0,0,.3);z-index:501;pointer-events:auto;}
+  .tour-box::before{content:'';position:absolute;width:12px;height:12px;background:var(--surface);border:2px solid var(--accent);transform:rotate(45deg);}
+  .tour-box.arrow-bottom::before{bottom:-7px;left:50%;margin-left:-6px;border-top:none;border-left:none;}
+  .tour-box.arrow-top::before{top:-7px;left:50%;margin-left:-6px;border-bottom:none;border-right:none;}
+  .tour-box.arrow-left::before{left:-7px;top:50%;margin-top:-6px;border-bottom:none;border-left:none;border-right:2px solid var(--accent);border-top:2px solid var(--accent);}
+  .tour-title{font-family:'Syne',sans-serif;font-weight:700;font-size:.85rem;color:var(--text);margin-bottom:4px;}
+  .tour-text{font-family:'DM Mono',monospace;font-size:.73rem;color:var(--muted);line-height:1.5;}
+  .tour-nav{display:flex;justify-content:space-between;align-items:center;margin-top:10px;}
+  .tour-dots{display:flex;gap:4px;}
+  .tour-dot{width:6px;height:6px;border-radius:50%;background:var(--border);}
+  .tour-dot.active{background:var(--accent);}
+  .tour-skip{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--muted);cursor:pointer;background:none;border:none;padding:0;}
+  .tour-skip:hover{color:var(--text);}
+  .tour-next{font-family:'Syne',sans-serif;font-size:.75rem;font-weight:700;padding:5px 12px;background:var(--accent);color:#0a0a0f;border:none;border-radius:6px;cursor:pointer;}
+  [data-theme="light"] .tour-next{color:#fff;}
+  .tour-highlight{position:relative;z-index:502;}
 </style>
 </head>
 <body>
@@ -224,8 +250,8 @@
     <div class="modal-divider"></div>
     <div class="lbl" style="margin-bottom:8px;justify-content:center">Elige tu tema</div>
     <div style="display:flex;gap:8px;margin-bottom:1.2rem;">
-      <button class="theme-pick active" data-t="dark" onclick="pickTheme('dark')">🌙 Oscuro</button>
-      <button class="theme-pick" data-t="light" onclick="pickTheme('light')">☀️ Claro</button>
+      <button class="theme-pick" data-t="dark" onclick="pickTheme('dark')">🌙 Oscuro</button>
+      <button class="theme-pick active" data-t="light" onclick="pickTheme('light')">☀️ Claro</button>
     </div>
     <button class="modal-close-btn" onclick="closeModal()">Entendido, comenzar &rarr;</button>
   </div>
@@ -398,6 +424,7 @@ function toggleTheme(){
   const next=h.getAttribute('data-theme')==='dark'?'light':'dark';
   h.setAttribute('data-theme',next);
   localStorage.setItem('theme',next);
+  saveTheme(next);
 }
 (()=>{ document.documentElement.setAttribute('data-theme',localStorage.getItem('theme')||'dark'); })();
 
@@ -698,6 +725,10 @@ function pickTheme(t){
   document.documentElement.setAttribute('data-theme', t);
   localStorage.setItem('theme', t);
   document.querySelectorAll('.theme-pick').forEach(b=>b.classList.toggle('active', b.dataset.t===t));
+  saveTheme(t);
+}
+async function saveTheme(t){
+  try{ await fetch('/set-theme', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({theme:t})}); }catch(e){}
 }
 function closeModal(){
   const m = document.getElementById('welcomeModal');
@@ -717,5 +748,88 @@ function closeModal(){
     setTimeout(()=>{ document.getElementById('welcomeModal').classList.add('visible'); }, 400);
   }
 })();
+
+
+// ── Tour / Onboarding ──
+const TOUR_STEPS = [
+  { target:'dz1',        arrow:'bottom', title:'Sube tu PDF', text:'Arrastra tu archivo aquí o haz clic para buscarlo en tu computadora.' },
+  { target:'panel-convert', arrow:'top', title:'Calidad', text:'Normal es suficiente para la mayoría de documentos. Usa Alta o Máxima si necesitas más nitidez.' },
+  { target:'wrb',        arrow:'bottom', title:'Texto de relleno', text:'Opcional — presiona 🎲 para agregar texto aleatorio al documento que no se verá pero ayuda a que pase filtros.' },
+  { target:'convertBtn', arrow:'top',    title:'Listo para convertir', text:'Cuando subas tu PDF este botón se activará. Haz clic y descarga tu documento procesado.' },
+];
+
+let tourStep = 0;
+let tourEl = null;
+
+function startTour(){
+  tourStep = 0;
+  showTourStep();
+}
+
+function showTourStep(){
+  removeTourEl();
+  if(tourStep >= TOUR_STEPS.length){ endTour(); return; }
+  const s = TOUR_STEPS[tourStep];
+  const target = document.getElementById(s.target);
+  if(!target){ tourStep++; showTourStep(); return; }
+
+  target.classList.add('tour-highlight');
+  const rect = target.getBoundingClientRect();
+
+  const box = document.createElement('div');
+  box.className = `tour-box arrow-${s.arrow}`;
+  box.innerHTML = `
+    <div class="tour-title">${s.title}</div>
+    <div class="tour-text">${s.text}</div>
+    <div class="tour-nav">
+      <div class="tour-dots">${TOUR_STEPS.map((_,i)=>`<div class="tour-dot${i===tourStep?' active':''}"></div>`).join('')}</div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button class="tour-skip" onclick="endTour()">Omitir</button>
+        <button class="tour-next" onclick="nextTourStep()">${tourStep===TOUR_STEPS.length-1?'¡Listo!':'Siguiente →'}</button>
+      </div>
+    </div>`;
+
+  document.body.appendChild(box);
+  tourEl = box;
+
+  // Position box near target
+  const scrollY = window.scrollY;
+  const boxH = 140;
+  if(s.arrow === 'bottom'){
+    box.style.left = Math.max(10, rect.left + rect.width/2 - 120) + 'px';
+    box.style.top  = (rect.top + scrollY - boxH - 14) + 'px';
+  } else {
+    box.style.left = Math.max(10, rect.left + rect.width/2 - 120) + 'px';
+    box.style.top  = (rect.bottom + scrollY + 14) + 'px';
+  }
+}
+
+function nextTourStep(){
+  const s = TOUR_STEPS[tourStep];
+  document.getElementById(s.target)?.classList.remove('tour-highlight');
+  tourStep++;
+  showTourStep();
+}
+
+function endTour(){
+  removeTourEl();
+  TOUR_STEPS.forEach(s=>document.getElementById(s.target)?.classList.remove('tour-highlight'));
+  try{ localStorage.setItem('redactpdf_tour_{{ username }}','1'); }catch(e){}
+}
+
+function removeTourEl(){
+  if(tourEl){ tourEl.remove(); tourEl=null; }
+}
+
+// Start tour after modal closes (if first time)
+const _origClose = closeModal;
+closeModal = function(){
+  _origClose();
+  try{
+    if(!localStorage.getItem('redactpdf_tour_{{ username }}')){
+      setTimeout(startTour, 300);
+    }
+  }catch(e){ setTimeout(startTour, 300); }
+};
 
 </script>

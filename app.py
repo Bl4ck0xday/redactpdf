@@ -19,9 +19,10 @@ app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_SECURE"] = os.environ.get("FLASK_ENV") == "production"
 
 BASE       = os.path.dirname(os.path.abspath(__file__))
-USERS_FILE = os.path.join(BASE, "users.json")
-LOG_FILE   = os.path.join(BASE, "activity.log")
-HIST_FILE  = os.path.join(BASE, "history.json")
+DATA_DIR   = "/data" if os.path.isdir("/data") else BASE
+USERS_FILE = os.path.join(DATA_DIR, "users.json")
+LOG_FILE   = os.path.join(DATA_DIR, "activity.log")
+HIST_FILE  = os.path.join(DATA_DIR, "history.json")
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def load_json(path, default):
@@ -103,9 +104,25 @@ def logout():
 @app.route("/tool")
 @login_required
 def tool():
+    users = load_users()
+    theme = users.get(session["username"], {}).get("theme", "light")
     return render_template("tool.html",
                            name=session.get("name", ""),
-                           is_admin=session.get("is_admin", False))
+                           is_admin=session.get("is_admin", False),
+                           username=session.get("username", ""),
+                           theme=theme)
+
+@app.route("/set-theme", methods=["POST"])
+@login_required
+def set_theme():
+    data = request.get_json()
+    theme = data.get("theme", "light")
+    if theme not in ("light", "dark"): return jsonify({"ok": False}), 400
+    users = load_users()
+    if session["username"] in users:
+        users[session["username"]]["theme"] = theme
+        save_users(users)
+    return jsonify({"ok": True})
 
 # ── Admin API ─────────────────────────────────────────────────────────────────
 @app.route("/admin/users", methods=["GET"])
