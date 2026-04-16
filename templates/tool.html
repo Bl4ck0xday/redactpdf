@@ -187,6 +187,9 @@
   .modal-link.gh:hover{border-color:var(--text);color:var(--text);}
   .modal-link.wa{background:rgba(37,211,102,.08);border:1px solid rgba(37,211,102,.25);color:#25d366;}
   .modal-link.wa:hover{background:rgba(37,211,102,.15);}
+  .theme-pick{flex:1;padding:9px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--muted);font-family:'DM Mono',monospace;font-size:.8rem;cursor:pointer;transition:all .15s;}
+  .theme-pick:hover{border-color:var(--muted);color:var(--text);}
+  .theme-pick.active{border-color:var(--accent);color:var(--accent);background:rgba(109,40,217,.07);}
   .modal-close-btn{width:100%;margin-top:1.2rem;padding:11px;background:var(--accent);color:#0a0a0f;border:none;border-radius:9px;font-family:'Syne',sans-serif;font-size:.92rem;font-weight:700;cursor:pointer;transition:all .2s;}
   .modal-close-btn:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(109,40,217,.22);}
   [data-theme="light"] .modal-close-btn{color:#fff;}
@@ -218,6 +221,12 @@
         829-854-9698
       </a>
     </div>
+    <div class="modal-divider"></div>
+    <div class="lbl" style="margin-bottom:8px;justify-content:center">Elige tu tema</div>
+    <div style="display:flex;gap:8px;margin-bottom:1.2rem;">
+      <button class="theme-pick active" data-t="dark" onclick="pickTheme('dark')">🌙 Oscuro</button>
+      <button class="theme-pick" data-t="light" onclick="pickTheme('light')">☀️ Claro</button>
+    </div>
     <button class="modal-close-btn" onclick="closeModal()">Entendido, comenzar &rarr;</button>
   </div>
 </div>
@@ -246,8 +255,6 @@
   <!-- CONVERT -->
   <div class="panel active" id="panel-convert">
     <div class="card">
-
-      <!-- Dropzone 1 — click handled by JS, NOT inline onclick -->
       <div class="dropzone" id="dz1">
         <div id="dz1-empty" style="text-align:center;width:100%">
           <span class="drop-icon">📄</span>
@@ -265,35 +272,28 @@
       </div>
 
       <div class="options">
+        <!-- Calidad simplificada -->
         <div>
-          <div class="lbl">Calidad (DPI)</div>
+          <div class="lbl">Calidad</div>
           <div class="dpi-row">
-            <div class="dpi-btn" data-dpi="96">96 — Rápido</div>
-            <div class="dpi-btn active" data-dpi="150">150 — Balanceado</div>
-            <div class="dpi-btn" data-dpi="200">200 — Alta</div>
-            <div class="dpi-btn" data-dpi="300">300 — Máx</div>
+            <div class="dpi-btn" data-dpi="96">Rápido</div>
+            <div class="dpi-btn active" data-dpi="150">Normal</div>
+            <div class="dpi-btn" data-dpi="200">Alta</div>
+            <div class="dpi-btn" data-dpi="300">Máxima</div>
           </div>
         </div>
 
+        <!-- Texto extra simplificado -->
         <div>
-          <div class="lbl">Texto invisible incrustado <span class="tag">OPCIONAL</span></div>
-          <div class="lbl" style="margin-top:6px;margin-bottom:5px">Modo de distribución</div>
-          <div class="mode-row">
-            <div class="mode-btn active" data-mode="per_page" onclick="setMode('per_page')">Diferente por página</div>
-            <div class="mode-btn" data-mode="same" onclick="setMode('same')">Mismo en todas</div>
-          </div>
-          <div class="per-page-hint visible" id="perPageHint">
-            Cada vez que presionas <strong>🎲 Random</strong> se agrega un bloque nuevo separado por <strong>---</strong> — uno por página. También puedes escribir manualmente y separar con <strong>---</strong>.
-          </div>
+          <div class="lbl">Texto de relleno <span class="tag">OPCIONAL</span></div>
           <div class="wiki-row">
-            <input type="text" id="wikiTopic" class="wiki-input" placeholder="Tema Wikipedia…">
-            <button class="wiki-btn" id="wfb" onclick="fetchWiki()"><span class="spin">↻</span><span class="lbl2">🔍 Jalar</span></button>
-            <button class="wiki-rand" id="wrb" onclick="fetchWikiRandom()">🎲 Random</button>
+            <input type="text" id="wikiTopic" class="wiki-input" placeholder="Buscar tema…">
+            <button class="wiki-btn" id="wfb" onclick="fetchWiki()"><span class="spin">↻</span><span class="lbl2">🔍 Buscar</span></button>
+            <button class="wiki-rand" id="wrb" onclick="fetchWikiRandom()">🎲</button>
           </div>
           <div class="wiki-stat" id="wikiStat"></div>
-          <div class="txt-wrap">
-            <textarea id="hiddenText" placeholder="Presiona 🎲 Random varias veces para llenar cada página con texto diferente…" maxlength="15000"></textarea>
-            <span class="ghost">invisible</span>
+          <div class="txt-wrap" style="margin-top:8px">
+            <textarea id="hiddenText" placeholder="Opcional — agrega texto de relleno al documento. Presiona 🎲 para uno aleatorio." maxlength="15000"></textarea>
           </div>
           <div class="char-c"><span id="cc">0</span>/15000</div>
         </div>
@@ -694,13 +694,20 @@ function setAdminMsg(id,msg,type){
 }
 
 // ── Welcome Modal ──
+function pickTheme(t){
+  document.documentElement.setAttribute('data-theme', t);
+  localStorage.setItem('theme', t);
+  document.querySelectorAll('.theme-pick').forEach(b=>b.classList.toggle('active', b.dataset.t===t));
+}
 function closeModal(){
   const m = document.getElementById('welcomeModal');
   m.classList.remove('visible');
-  // Save per-user key so it shows again on new device/session if no localStorage
   try { localStorage.setItem('redactpdf_welcomed_{{ username }}', '1'); } catch(e){}
 }
 (function(){
+  // Sync theme buttons with current theme
+  const cur = localStorage.getItem('theme')||'dark';
+  document.querySelectorAll('.theme-pick').forEach(b=>b.classList.toggle('active', b.dataset.t===cur));
   try {
     const key = 'redactpdf_welcomed_{{ username }}';
     if(!localStorage.getItem(key)){
