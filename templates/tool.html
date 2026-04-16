@@ -181,18 +181,19 @@ textarea::placeholder{color:var(--muted);}
 .modal-close-btn:hover{transform:translateY(-1px);}
 
 /* ── Tour ── */
-.tour-box{position:fixed;background:var(--surface);border:2px solid var(--accent);border-radius:12px;padding:14px 16px;max-width:240px;box-shadow:0 8px 30px rgba(0,0,0,.2);z-index:900;pointer-events:auto;}
-.tour-arrow{position:absolute;width:12px;height:12px;background:var(--surface);border:2px solid var(--accent);transform:rotate(45deg);}
-.tour-title{font-family:'Syne',sans-serif;font-weight:700;font-size:.85rem;color:var(--text);margin-bottom:4px;}
-.tour-text{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted);line-height:1.5;}
-.tour-nav{display:flex;justify-content:space-between;align-items:center;margin-top:10px;}
+.tour-box{position:absolute;background:var(--surface);border:2px solid var(--accent);border-radius:12px;padding:14px 16px;max-width:280px;box-shadow:0 8px 30px rgba(0,0,0,.25);z-index:900;pointer-events:auto;transition:top .2s,left .2s;}
+.tour-title{font-family:'Syne',sans-serif;font-weight:700;font-size:.87rem;color:var(--text);margin-bottom:6px;}
+.tour-text{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted);line-height:1.6;}
+.tour-text b{color:var(--text);font-weight:600;}
+.tour-nav{display:flex;justify-content:space-between;align-items:center;margin-top:12px;flex-wrap:wrap;gap:6px;}
 .tour-dots{display:flex;gap:4px;}
 .tour-dot{width:6px;height:6px;border-radius:50%;background:var(--border);}
 .tour-dot.active{background:var(--accent);}
-.tour-skip{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--muted);cursor:pointer;background:none;border:none;padding:0;}
+.tour-skip{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted);cursor:pointer;background:none;border:none;padding:0;text-decoration:underline;}
+.tour-skip:hover{color:var(--danger);}
 .tour-next{font-family:'Syne',sans-serif;font-size:.75rem;font-weight:700;padding:5px 12px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;}
 [data-theme="dark"] .tour-next{color:#0a0a0f;}
-.tour-highlight{outline:3px solid var(--accent);outline-offset:3px;border-radius:8px;}
+.tour-highlight{outline:3px solid var(--accent);outline-offset:4px;border-radius:8px;position:relative;z-index:900;}
 
 .footer-note{margin-top:1.5rem;text-align:center;font-family:'DM Mono',monospace;font-size:.7rem;color:var(--muted);}
 </style>
@@ -672,62 +673,139 @@ function closeModal(){
 
 // ── Tour ──────────────────────────────────────────────────────────────────
 const TOUR=[
-  {id:'dz1',       pos:'above', title:'Sube tu PDF',         text:'Arrastra tu archivo aquí o haz clic para buscarlo.'},
-  {id:'tour-quality', pos:'below', title:'Elige la calidad', text:'"Normal" es suficiente para la mayoría. Usa "Máxima" si necesitas más nitidez.'},
-  {id:'tour-relleno', pos:'below', title:'Texto de relleno', text:'Opcional — presiona 🎲 para agregar texto aleatorio que no se verá pero ayuda a que el doc pase filtros.'},
-  {id:'convertBtn',pos:'above', title:'¡Listo!',             text:'Cuando subas tu PDF este botón se activa. Haz clic y descarga tu documento procesado.'},
+  {
+    id:'dz1', pos:'below',
+    title:'1 — Sube tu PDF 📄',
+    text:'Arrastra tu archivo directamente aquí, o haz clic para buscarlo en tu computadora. Solo se aceptan archivos PDF.'
+  },
+  {
+    id:'tour-quality', pos:'below',
+    title:'2 — Calidad de imagen 🖼',
+    text:'<b>Rápido</b> — archivo más liviano, procesa rápido.<br><b>Normal</b> — ideal para la mayoría de documentos.<br><b>Alta / Máxima</b> — mayor nitidez, archivo más pesado.'
+  },
+  {
+    id:'wikiTopic', pos:'below',
+    title:'3 — Buscar tema 🔍',
+    text:'Escribe cualquier tema y presiona Buscar para traer un texto de Wikipedia sobre ese tema. Ese texto se incrustará de forma invisible en el documento.'
+  },
+  {
+    id:'wrb', pos:'below',
+    title:'4 — Texto aleatorio 🎲',
+    text:'Presiona este dado para agregar un artículo aleatorio de Wikipedia como relleno invisible. Presiónalo varias veces para llenar varias páginas con textos distintos — uno por página.'
+  },
+  {
+    id:'hiddenText', pos:'above',
+    title:'5 — Texto de relleno 👻',
+    text:'Este texto NO se verá en el documento final — es completamente invisible. Solo sirve como relleno de fondo para ayudar a que el archivo pase ciertos filtros. Puedes editarlo o dejarlo vacío.'
+  },
+  {
+    id:'convertBtn', pos:'above',
+    title:'6 — Convertir ✅',
+    text:'Cuando hayas subido tu PDF este botón se activa. Haz clic y en unos segundos se descargará tu documento procesado y listo para entregar.'
+  },
+  {
+    id:null, pos:null,
+    title:'7 — Pestaña Verificar 🔍',
+    text:'¿Quieres confirmar que el documento quedó bien? Ve a la pestaña <b>Verificar</b> y sube el PDF convertido — te mostrará todo el texto que contiene, incluyendo el relleno invisible que agregaste.',
+    highlight_tab: true
+  },
 ];
-let tourStep=0, tourEl=null;
 
-function startTour(){ tourStep=0; showStep(); }
+let tourStep=0, tourEl=null, tourOverlay=null;
+
+function startTour(){
+  tourStep=0;
+  // Create dimming overlay
+  tourOverlay=document.createElement('div');
+  tourOverlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:899;pointer-events:none;transition:opacity .3s;';
+  document.body.appendChild(tourOverlay);
+  showStep();
+}
 
 function showStep(){
-  clearTour();
+  clearTourBox();
   if(tourStep>=TOUR.length){ endTour(); return; }
   const s=TOUR[tourStep];
+
+  // Handle special tab-highlight step
+  if(s.highlight_tab){
+    document.querySelectorAll('.tab').forEach((t,i)=>{ if(i===1) t.classList.add('tour-highlight'); });
+    showTourBox(null, s);
+    return;
+  }
+
   const target=document.getElementById(s.id);
   if(!target){ tourStep++; showStep(); return; }
-  target.classList.add('tour-highlight');
 
+  // Scroll target into view
+  target.scrollIntoView({behavior:'smooth', block:'center'});
+  setTimeout(()=>{
+    target.classList.add('tour-highlight');
+    showTourBox(target, s);
+  }, 200);
+}
+
+function showTourBox(target, s){
   const box=document.createElement('div');
   box.className='tour-box';
+  const isLast = tourStep===TOUR.length-1;
   box.innerHTML=`
     <div class="tour-title">${s.title}</div>
     <div class="tour-text">${s.text}</div>
     <div class="tour-nav">
       <div class="tour-dots">${TOUR.map((_,i)=>`<div class="tour-dot${i===tourStep?' active':''}"></div>`).join('')}</div>
       <div style="display:flex;gap:8px;align-items:center">
-        <button class="tour-skip" onclick="endTour()">Omitir</button>
-        <button class="tour-next" onclick="nextStep()">${tourStep===TOUR.length-1?'¡Listo!':'Siguiente →'}</button>
+        <button class="tour-skip" onclick="skipTour()">No mostrar más</button>
+        <button class="tour-next" onclick="nextStep()">${isLast?'¡Entendido! 🎉':'Siguiente →'}</button>
       </div>
     </div>`;
   document.body.appendChild(box);
   tourEl=box;
 
-  const rect=target.getBoundingClientRect();
-  const scrollY=window.scrollY;
-  const bw=box.offsetWidth||240, bh=140;
-  let left=rect.left+rect.width/2-bw/2;
-  left=Math.max(10,Math.min(left, window.innerWidth-bw-10));
-  if(s.pos==='above'){
-    box.style.top=(rect.top+scrollY-bh-14)+'px';
-  } else {
-    box.style.top=(rect.bottom+scrollY+14)+'px';
+  if(!target){
+    // Center on screen
+    box.style.top='50%'; box.style.left='50%';
+    box.style.transform='translate(-50%,-50%)';
+    return;
   }
-  box.style.left=left+'px';
+
+  setTimeout(()=>{
+    const rect=target.getBoundingClientRect();
+    const scrollY=window.scrollY;
+    const bw=Math.min(280, window.innerWidth-24);
+    box.style.width=bw+'px';
+    let left=rect.left+rect.width/2-bw/2;
+    left=Math.max(12,Math.min(left, window.innerWidth-bw-12));
+    box.style.left=left+'px';
+    const bh=box.offsetHeight||160;
+    if(s.pos==='above'){
+      box.style.top=(rect.top+scrollY-bh-16)+'px';
+    } else {
+      box.style.top=(rect.bottom+scrollY+16)+'px';
+    }
+  }, 50);
 }
 
 function nextStep(){
-  TOUR[tourStep] && document.getElementById(TOUR[tourStep].id)?.classList.remove('tour-highlight');
+  const s=TOUR[tourStep];
+  if(s.id) document.getElementById(s.id)?.classList.remove('tour-highlight');
+  if(s.highlight_tab) document.querySelectorAll('.tab').forEach(t=>t.classList.remove('tour-highlight'));
   tourStep++;
   showStep();
 }
+
+function skipTour(){
+  endTour();
+}
+
 function endTour(){
-  clearTour();
-  TOUR.forEach(s=>document.getElementById(s.id)?.classList.remove('tour-highlight'));
+  clearTourBox();
+  if(tourOverlay){ tourOverlay.remove(); tourOverlay=null; }
+  TOUR.forEach(s=>{ if(s.id) document.getElementById(s.id)?.classList.remove('tour-highlight'); });
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('tour-highlight'));
   try{ localStorage.setItem('redactpdf_tour_{{ username }}','1'); }catch(e){}
 }
-function clearTour(){ if(tourEl){ tourEl.remove(); tourEl=null; } }
+function clearTourBox(){ if(tourEl){ tourEl.remove(); tourEl=null; } }
 </script>
 </body>
 </html>
